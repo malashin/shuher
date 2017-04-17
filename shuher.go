@@ -20,12 +20,13 @@ func dial(addr string) *ftp.ServerConn {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	consoleLog("Connection to " + addr + " is initialized")
+	consoleLog("Connection to " + addr + " initialized")
 	return conn
 }
 
 func quit(conn *ftp.ServerConn) {
 	conn.Quit()
+	consoleLog("Connection closed")
 }
 
 func login(conn *ftp.ServerConn, user string, pass string) {
@@ -66,6 +67,9 @@ func ls(conn *ftp.ServerConn, path string) (entries []*ftp.Entry) {
 func walk(conn *ftp.ServerConn) {
 	entries := ls(conn, "")
 	cwd := cwd(conn)
+	newLine := pad(cwd, len(lastLine))
+	fmt.Print(newLine + "\r")
+	lastLine = cwd
 	for _, element := range entries {
 		switch element.Type {
 		case ftp.EntryTypeFile:
@@ -75,7 +79,10 @@ func walk(conn *ftp.ServerConn) {
 				if fileExists {
 					// Old file with new date
 					if !entry.Time.Equal(element.Time) {
-						consoleLog(key + " datetime changed")
+						consoleLog("~ " + truncPad(key, 40, 'l') + " datetime changed")
+						fileList[key] = newFileEntry(element)
+					} else if entry.Size != element.Size {
+						consoleLog("~ " + truncPad(key, 40, 'l') + " size changed")
 						fileList[key] = newFileEntry(element)
 					} else {
 						entry.Found = true
@@ -83,7 +90,7 @@ func walk(conn *ftp.ServerConn) {
 					}
 				} else {
 					// New file
-					consoleLog(key + " " + fmt.Sprintf("%v", element.Type) + " " + fmt.Sprintf("%v", element.Size) + " " + element.Time.String())
+					consoleLog("+ " + truncPad(key, 40, 'l') + " new file")
 					fileList[key] = newFileEntry(element)
 				}
 			}
@@ -93,6 +100,26 @@ func walk(conn *ftp.ServerConn) {
 			cdup(conn)
 		}
 	}
+}
+
+func pad(s string, n int) string {
+	if n > len(s) {
+		return s + strings.Repeat(" ", n-len(s))
+	}
+	return s
+}
+
+func truncPad(s string, n int, side byte) string {
+	if len(s) > n {
+		if n >= 3 {
+			return "..." + s[0+n:len(s)]
+		}
+		return s[0:n]
+	}
+	if side == 'r' {
+		return strings.Repeat(" ", n-len(s)) + s
+	}
+	return s + strings.Repeat(" ", n-len(s))
 }
 
 func acceptFileName(fileName string) bool {
@@ -147,7 +174,7 @@ func (fl *tFileList) clean() {
 	for key, value := range *fl {
 		if !value.Found {
 			delete(*fl, key)
-			consoleLog(key + " deleted")
+			consoleLog("- " + truncPad(key, 40, 'l') + " deleted")
 		}
 	}
 }
@@ -167,7 +194,6 @@ func (fl *tFileList) save(filepath string) {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	consoleLog("\"" + filepath + "\" is saved")
 }
 
 func (fl *tFileList) load(filepath string) {
@@ -248,35 +274,36 @@ var logFilePath = "shuher.log"
 var watcherRootPath = "/AMEDIATEKA"
 var fileMask = regexp.MustCompile(`^.*\.mxf$`)
 var logger *log.Logger
+var lastLine string
+var sleepTime = 10 * time.Minute
 
 func main() {
 	// Open log file.
 	var logFile *os.File
 	logFile, logger = createLog()
 	defer closeLog(logFile)
-
 	// Load file list.
 	fileList.load("shuherFileList.txt")
 
-	// Initialize the connection to the specified ftp server address.
-	conn := dial(addr)
-
-	// Properly close the connection on exit.
-	defer quit(conn)
-
-	// Authenticate the client with specified user and password.
-	login(conn, user, pass)
-
-	// Change directory watcherRootPath.
-	cd(conn, watcherRootPath)
-
-	// Walk the directory tree.
-	consoleLog("Looking for new files...")
-	walk(conn)
-
-	// Remove deleted files from the fileList.
-	fileList.clean()
-
-	// Save new fileList.
-	fileList.save("shuherFileList.txt")
+	for {
+		// Initialize the connection to the specified ftp server address.
+		conn := dial(addr)
+		// Properly close the connection on exit.
+		defer quit(conn)
+		// Authenticate the client with specified user and password.
+		login(conn, user, pass)
+		// Change directory watcherRootPath.
+		cd(conn, watcherRootPath)
+		// Walk the directory tree.
+		consoleLog("Looking for new files...")
+		walk(conn)
+		// Remove deleted files from the fileList.
+		fileList.clean()
+		// Save new fileList.
+		fileList.save("shuherFileList.txt")
+		// Terminate the FTP connection.
+		quit(conn)
+		// Wait for sleepTime before checking again.
+		time.Sleep(sleepTime)
+	}
 }
