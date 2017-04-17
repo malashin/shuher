@@ -20,7 +20,7 @@ func dial(addr string) *ftp.ServerConn {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	consoleLog("Connection to " + addr + " initialized")
+	consoleLog("Connected to " + addr)
 	return conn
 }
 
