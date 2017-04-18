@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -18,6 +19,7 @@ import (
 // Loggerer ...
 type Loggerer struct {
 	logger ILogger
+	err    error
 }
 
 // SetLogger sets objects logger
@@ -32,6 +34,26 @@ func (l *Loggerer) Log(text ...interface{}) {
 	}
 }
 
+// Error ...
+func (l *Loggerer) Error(text ...interface{}) {
+	if l.logger != nil {
+		l.logger.Log("ERROR: " + fmt.Sprint(text...))
+	}
+	if l.err == nil {
+		l.err = errors.New(fmt.Sprint(text...))
+	}
+}
+
+// ResetError ...
+func (l *Loggerer) ResetError() {
+	l.err = nil
+}
+
+// GetError ...
+func (l *Loggerer) GetError() error {
+	return l.err
+}
+
 type ftpConn struct {
 	Loggerer
 	conn      *ftp.ServerConn
@@ -43,9 +65,10 @@ func newFtpConn() *ftpConn {
 }
 
 func (f *ftpConn) dial(addr string) {
+	f.ResetError()
 	conn, err := ftp.Dial(addr)
 	if err != nil {
-		log.Panicln(err)
+		f.Error(err)
 	}
 	f.conn = conn
 	f.connected = true
@@ -58,67 +81,61 @@ func (f *ftpConn) quit() {
 	}
 	f.conn.Quit()
 	f.connected = false
-	f.Log("Connection closed")
+	f.Log("Connection closed correctly")
 }
 
 func (f *ftpConn) login(user string, pass string) {
-	if !f.connected {
-		f.Log("ERROR: ftpConn.login() No FTP connection")
+	if f.GetError() != nil {
 		return
 	}
 	err := f.conn.Login(user, pass)
 	if err != nil {
-		log.Panicln(err)
+		f.Error(err)
 	}
 	f.Log("Logged in as " + user)
 }
 
 func (f *ftpConn) cwd() string {
-	if !f.connected {
-		f.Log("ERROR: ftpConn.cwd() No FTP connection")
+	if f.GetError() != nil {
 		return ""
 	}
 	cwd, err := f.conn.CurrentDir()
 	if err != nil {
-		log.Panicln(err)
+		f.Error(err)
 	}
 	return cwd
 }
 
 func (f *ftpConn) cd(path string) {
-	if !f.connected {
-		f.Log("ERROR: ftpConn.cd() No FTP connection")
+	if f.GetError() != nil {
 		return
 	}
 	err := f.conn.ChangeDir(path)
 	if err != nil {
-		log.Panicln(err)
+		f.Error(err)
 	}
 }
 
 func (f *ftpConn) cdup() {
-	if !f.connected {
-		f.Log("ERROR: ftpConn.cdup() No FTP connection")
+	if f.GetError() != nil {
 		return
 	}
 	f.conn.ChangeDirToParent()
 }
 
 func (f *ftpConn) ls(path string) (entries []*ftp.Entry) {
-	if !f.connected {
-		f.Log("ERROR: ftpConn.ls() No FTP connection")
+	if f.GetError() != nil {
 		return
 	}
 	entries, err := f.conn.List(path)
 	if err != nil {
-		log.Panicln(err)
+		f.Error(err)
 	}
 	return entries
 }
 
 func (f *ftpConn) walk(fl map[string]fileEntry) {
-	if !f.connected {
-		f.Log("ERROR: ftpConn.walk() No FTP connection")
+	if f.GetError() != nil {
 		return
 	}
 	entries := f.ls("")
@@ -334,7 +351,8 @@ var fileListPath = "shuherFileList.txt"
 var watcherRootPath = "/AMEDIATEKA"
 var fileMask = regexp.MustCompile(`^.*\.mxf$`)
 var lastLine string
-var sleepTime = 10 * time.Minute
+var longSleepTime = 15 * time.Minute
+var shortSleepTime = 1 * time.Minute
 
 func main() {
 	// Create objects.
@@ -359,13 +377,18 @@ func main() {
 		// Walk the directory tree.
 		logger.Log("Looking for new files...")
 		ftpConn.walk(fileList.file)
+		// Terminate the FTP connection.
+		ftpConn.quit()
 		// Remove deleted files from the fileList.
 		fileList.clean()
 		// Save new fileList.
-		fileList.save(fileListPath)
-		// Terminate the FTP connection.
-		ftpConn.quit()
-		// Wait for sleepTime before checking again.
-		time.Sleep(sleepTime)
+		if ftpConn.GetError() == nil {
+			fileList.save(fileListPath)
+			// Wait for sleepTime before checking again.
+			time.Sleep(longSleepTime)
+		} else {
+			// Wait for sleepTime before checking again.
+			time.Sleep(shortSleepTime)
+		}
 	}
 }
