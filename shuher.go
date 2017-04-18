@@ -15,24 +15,31 @@ import (
 	"github.com/jlaffaye/ftp"
 )
 
+// Loggerer ...
+type Loggerer struct {
+	logger ILogger
+}
+
+// SetLogger sets objects logger
+func (l *Loggerer) SetLogger(logger ILogger) {
+	l.logger = logger
+}
+
+// Log logs the input text
+func (l *Loggerer) Log(text ...interface{}) {
+	if l.logger != nil {
+		l.logger.Log(text...)
+	}
+}
+
 type ftpConn struct {
+	Loggerer
 	conn      *ftp.ServerConn
-	logger    ILogger
 	connected bool
 }
 
 func newFtpConn() *ftpConn {
 	return &ftpConn{}
-}
-
-func (f *ftpConn) setLogger(l ILogger) {
-	f.logger = l
-}
-
-func (f *ftpConn) Log(text ...interface{}) {
-	if f.logger != nil {
-		f.logger.Log(text...)
-	}
 }
 
 func (f *ftpConn) dial(addr string) {
@@ -199,22 +206,12 @@ func (fe *fileEntry) pack() string {
 }
 
 type tFileList struct {
-	file   map[string]fileEntry
-	logger ILogger
+	Loggerer
+	file map[string]fileEntry
 }
 
 func newFileList() *tFileList {
 	return &tFileList{file: map[string]fileEntry{}}
-}
-
-func (fl *tFileList) setLogger(l ILogger) {
-	fl.logger = l
-}
-
-func (fl *tFileList) Log(text ...interface{}) {
-	if fl.logger != nil {
-		fl.logger.Log(text...)
-	}
 }
 
 func (fl *tFileList) pack() string {
@@ -344,9 +341,9 @@ func main() {
 	logger := newLogger()
 	defer logger.close()
 	ftpConn := newFtpConn()
-	ftpConn.setLogger(logger)
+	ftpConn.SetLogger(logger)
 	fileList := newFileList()
-	fileList.setLogger(logger)
+	fileList.SetLogger(logger)
 	// Load file list.
 	fileList.load(fileListPath)
 	// Properly close the connection on exit.
