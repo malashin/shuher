@@ -69,6 +69,7 @@ func (f *ftpConn) dial(addr string) {
 	conn, err := ftp.Dial(addr)
 	if err != nil {
 		f.Error(err)
+		return
 	}
 	f.conn = conn
 	f.connected = true
@@ -91,6 +92,7 @@ func (f *ftpConn) login(user string, pass string) {
 	err := f.conn.Login(user, pass)
 	if err != nil {
 		f.Error(err)
+		return
 	}
 	f.Log("Logged in as " + user)
 }
@@ -102,6 +104,7 @@ func (f *ftpConn) cwd() string {
 	cwd, err := f.conn.CurrentDir()
 	if err != nil {
 		f.Error(err)
+		return ""
 	}
 	return cwd
 }
@@ -113,6 +116,7 @@ func (f *ftpConn) cd(path string) {
 	err := f.conn.ChangeDir(path)
 	if err != nil {
 		f.Error(err)
+		return
 	}
 }
 
@@ -130,6 +134,7 @@ func (f *ftpConn) ls(path string) (entries []*ftp.Entry) {
 	entries, err := f.conn.List(path)
 	if err != nil {
 		f.Error(err)
+		return
 	}
 	return entries
 }
@@ -185,9 +190,9 @@ func pad(s string, n int) string {
 func truncPad(s string, n int, side byte) string {
 	if len(s) > n {
 		if n >= 3 {
-			return "..." + s[0+n:len(s)]
+			return "..." + s[len(s)-n+3:len(s)]
 		}
-		return s[0:n]
+		return s[len(s)-n : len(s)]
 	}
 	if side == 'r' {
 		return strings.Repeat(" ", n-len(s)) + s
@@ -245,6 +250,8 @@ func (fl *tFileList) clean() {
 		if !value.Found {
 			delete(fl.file, key)
 			fl.Log("- " + truncPad(key, 40, 'l') + " deleted")
+		} else {
+			value.Found = false
 		}
 	}
 }
@@ -372,11 +379,13 @@ func main() {
 		ftpConn.dial(addr)
 		// Authenticate the client with specified user and password.
 		ftpConn.login(user, pass)
-		// Change directory watcherRootPath.
+		// Change directory to watcherRootPath.
 		ftpConn.cd(watcherRootPath)
 		// Walk the directory tree.
-		logger.Log("Looking for new files...")
-		ftpConn.walk(fileList.file)
+		if ftpConn.GetError() == nil {
+			logger.Log("Looking for new files...")
+			ftpConn.walk(fileList.file)
+		}
 		// Terminate the FTP connection.
 		ftpConn.quit()
 		// Remove deleted files from the fileList.
