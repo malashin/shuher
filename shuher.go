@@ -28,16 +28,16 @@ func (l *Loggerer) SetLogger(logger ILogger) {
 }
 
 // Log logs the input text
-func (l *Loggerer) Log(text ...interface{}) {
+func (l *Loggerer) Log(loglevel int, text ...interface{}) {
 	if l.logger != nil {
-		l.logger.Log(text...)
+		l.logger.Log(loglevel, text...)
 	}
 }
 
 // Error ...
 func (l *Loggerer) Error(text ...interface{}) {
 	if l.logger != nil {
-		l.logger.Log("ERROR: " + fmt.Sprint(text...))
+		l.logger.Log(Error, "ERROR: "+fmt.Sprint(text...))
 	}
 	if l.err == nil {
 		l.err = errors.New(fmt.Sprint(text...))
@@ -73,7 +73,7 @@ func (f *ftpConn) dial(addr string) {
 	}
 	f.conn = conn
 	f.connected = true
-	f.Log("Connected to " + addr)
+	f.Log(Debug, "Connected to "+addr)
 }
 
 func (f *ftpConn) quit() {
@@ -82,7 +82,7 @@ func (f *ftpConn) quit() {
 	}
 	f.conn.Quit()
 	f.connected = false
-	f.Log("Connection closed correctly")
+	f.Log(Debug, "Connection closed correctly")
 }
 
 func (f *ftpConn) login(user string, pass string) {
@@ -94,7 +94,7 @@ func (f *ftpConn) login(user string, pass string) {
 		f.Error(err)
 		return
 	}
-	f.Log("Logged in as " + user)
+	f.Log(Debug, "Logged in as "+user)
 }
 
 func (f *ftpConn) cwd() string {
@@ -157,10 +157,10 @@ func (f *ftpConn) walk(fl map[string]fileEntry) {
 				if fileExists {
 					// Old file with new date
 					if !entry.Time.Equal(element.Time) {
-						f.Log("~ " + truncPad(key, 40, 'l') + " datetime changed")
+						f.Log(Notice, "~ "+truncPad(key, 40, 'l')+" datetime changed")
 						fl[key] = newFileEntry(element)
 					} else if entry.Size != element.Size {
-						f.Log("~ " + truncPad(key, 40, 'l') + " size changed")
+						f.Log(Notice, "~ "+truncPad(key, 40, 'l')+" size changed")
 						fl[key] = newFileEntry(element)
 					} else {
 						entry.Found = true
@@ -168,7 +168,7 @@ func (f *ftpConn) walk(fl map[string]fileEntry) {
 					}
 				} else {
 					// New file
-					f.Log("+ " + truncPad(key, 40, 'l') + " new file")
+					f.Log(Notice, "+ "+truncPad(key, 40, 'l')+" new file")
 					fl[key] = newFileEntry(element)
 				}
 			}
@@ -249,7 +249,7 @@ func (fl *tFileList) clean() {
 	for key, value := range fl.file {
 		if !value.Found {
 			delete(fl.file, key)
-			fl.Log("- " + truncPad(key, 40, 'l') + " deleted")
+			fl.Log(Notice, "- "+truncPad(key, 40, 'l')+" deleted")
 		} else {
 			value.Found = false
 		}
@@ -274,10 +274,10 @@ func (fl *tFileList) save(filepath string) {
 }
 
 func (fl *tFileList) load(filepath string) {
-	fl.Log("Loading \"" + filepath + "\"...")
+	fl.Log(Debug, "Loading \""+filepath+"\"...")
 	file, err := os.Open(filepath)
 	if err != nil {
-		fl.Log("\"" + filepath + "\" not found")
+		fl.Log(Error, "\""+filepath+"\" not found")
 		return
 	}
 	defer file.Close()
@@ -299,7 +299,7 @@ func (fl *tFileList) load(filepath string) {
 func (fl *tFileList) parseLine(line string) (string, fileEntry) {
 	// "?{/AMEDIATEKA/ANIMALS_2/SER_05620.mxf?}SER_05620.mxf?|13114515508?|2017-03-17 14:39:39 +0000 UTC"
 	if !regExpLine.MatchString(line) {
-		fl.Log("ERROR: Wrong input in file list (" + line + ")")
+		fl.Log(Error, "Wrong input in file list ("+line+")")
 		return "", fileEntry{}
 	}
 	matches := regExpLine.FindStringSubmatch(line)
@@ -310,7 +310,7 @@ func (fl *tFileList) parseLine(line string) (string, fileEntry) {
 	entry.Size = uint64(entrySize)
 	entry.Time, err = time.Parse("2006-01-02 15:04:05 +0000 UTC", matches[4])
 	if err != nil {
-		fl.Log(err)
+		fl.Log(Error, err)
 		return "", fileEntry{}
 	}
 	return key, entry
@@ -318,32 +318,84 @@ func (fl *tFileList) parseLine(line string) (string, fileEntry) {
 
 // ILogger ...
 type ILogger interface {
-	Log(text ...interface{})
+	Log(loglevel int, text ...interface{})
 }
 
 type logger struct {
-	file   *os.File
-	logger *log.Logger
+	writers []tWriter
+}
+
+type tWriter struct {
+	writer   io.Writer
+	loglevel int
 }
 
 func newLogger() *logger {
-	l := &logger{}
-	file, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0755)
+	return &logger{}
+}
+
+func (l *logger) addLogger(loglevel int, writer io.Writer) {
+	l.writers = append(l.writers, tWriter{writer, loglevel})
+}
+
+func (l *logger) Log(loglevel int, text ...interface{}) {
+	for _, writer := range l.writers {
+		if loglevel&writer.loglevel != 0 {
+			_, err := writer.writer.Write([]byte(time.Now().Format("2006-01-02 15:04:05") + " " + logLeveltoStr(loglevel) + ": " + fmt.Sprint(text...) + "\n"))
+			if err != nil {
+				fmt.Println(err)
+			}
+		}
+	}
+	if loglevel&Panic != 0 {
+		panic(fmt.Sprint(text...))
+	}
+}
+
+// LogLevel flags
+const (
+	Quiet = 0
+	Panic = 1 << iota
+	Error
+	Warning
+	Notice
+	Info
+	Debug
+)
+
+func logLevelLeq(loglevel int) int {
+	return loglevel - 1 | loglevel
+}
+
+func logLeveltoStr(loglevel int) string {
+	s := []string{}
+	if loglevel&Panic != 0 {
+		s = append(s, "PNC")
+	}
+	if loglevel&Error != 0 {
+		s = append(s, "ERR")
+	}
+	if loglevel&Warning != 0 {
+		s = append(s, "WRN")
+	}
+	if loglevel&Notice != 0 {
+		s = append(s, "NTC")
+	}
+	if loglevel&Info != 0 {
+		s = append(s, "INF")
+	}
+	if loglevel&Debug != 0 {
+		s = append(s, "DBG")
+	}
+	return strings.Join(s, "|")
+}
+
+func newFileWriter(path string) *os.File {
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0755)
 	if err != nil {
 		log.Panicln(err)
 	}
-	l.file = file
-	l.logger = log.New(file, "", log.LstdFlags)
-	return l
-}
-
-func (l *logger) close() {
-	l.file.Close()
-}
-
-func (l *logger) Log(text ...interface{}) {
-	log.Println(text...)
-	l.logger.Print(text...)
+	return file
 }
 
 // Global variables are set in private file.
@@ -363,8 +415,11 @@ var shortSleepTime = 1 * time.Minute
 
 func main() {
 	// Create objects.
+	fileWriter := newFileWriter(logFilePath)
+	defer fileWriter.Close()
 	logger := newLogger()
-	defer logger.close()
+	logger.addLogger(logLevelLeq(Debug), fileWriter)
+	logger.addLogger(logLevelLeq(Info), os.Stdout)
 	ftpConn := newFtpConn()
 	ftpConn.SetLogger(logger)
 	fileList := newFileList()
@@ -383,8 +438,9 @@ func main() {
 		ftpConn.cd(watcherRootPath)
 		// Walk the directory tree.
 		if ftpConn.GetError() == nil {
-			logger.Log("Looking for new files...")
+			logger.Log(Info, "Looking for new files...")
 			ftpConn.walk(fileList.file)
+			fmt.Print(pad("", len(lastLine)) + "\r")
 		}
 		// Terminate the FTP connection.
 		ftpConn.quit()
