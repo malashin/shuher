@@ -412,15 +412,16 @@ func (m *TMailWriter) Write(p []byte) (n int, err error) {
 	return 0, nil
 }
 
-func (m *TMailWriter) Send() {
+func (m *TMailWriter) Send() error {
 	if len(m.msg) != 0 {
 		body := strings.Join(m.msg, "")
 		err := pochta.SendMail(smtpserver, auth, from, to, subject, body)
 		if err != nil {
-			log.Panicln(err)
+			return err
 		}
 		m.msg = []string{}
 	}
+	return nil
 }
 
 // Global variables are set in private file.
@@ -442,7 +443,7 @@ var fileListPath = "shuherFileList.txt"
 var watcherRootPath = "/AMEDIATEKA"
 var fileMask = regexp.MustCompile(`^.*\.mxf$`)
 var lastLine string
-var longSleepTime = 15 * time.Minute
+var longSleepTime = 30 * time.Minute
 var shortSleepTime = 1 * time.Minute
 
 func main() {
@@ -452,7 +453,7 @@ func main() {
 	mailWriter := NewMailWriter()
 	logger := newLogger()
 	logger.addLogger(logLevelLeq(Debug), fileWriter)
-	logger.addLogger(logLevelLeq(Notice), mailWriter)
+	logger.addLogger(Notice, mailWriter)
 	logger.addLogger(logLevelLeq(Info), os.Stdout)
 	ftpConn := newFtpConn()
 	ftpConn.SetLogger(logger)
@@ -480,7 +481,10 @@ func main() {
 		ftpConn.quit()
 		// Remove deleted files from the fileList.
 		fileList.clean()
-		mailWriter.Send()
+		err := mailWriter.Send()
+		if err != nil {
+			logger.Log(Error, err)
+		}
 		if ftpConn.GetError() == nil {
 			// Save new fileList.
 			fileList.save(fileListPath)
