@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/jlaffaye/ftp"
+	"github.com/malashin/pochta"
 )
 
 // Loggerer ...
@@ -398,11 +399,42 @@ func newFileWriter(path string) *os.File {
 	return file
 }
 
+type TMailWriter struct {
+	msg []string
+}
+
+func NewMailWriter() *TMailWriter {
+	return &TMailWriter{}
+}
+
+func (m *TMailWriter) Write(p []byte) (n int, err error) {
+	m.msg = append(m.msg, string(p))
+	return 0, nil
+}
+
+func (m *TMailWriter) Send() {
+	if len(m.msg) != 0 {
+		body := strings.Join(m.msg, "")
+		err := pochta.SendMail(smtpserver, auth, from, to, subject, body)
+		if err != nil {
+			log.Panicln(err)
+		}
+		m.msg = []string{}
+	}
+}
+
 // Global variables are set in private file.
 // Ftp server address with port.
 // var addr = ""
 // var user = ""
 // var pass = ""
+
+// Mail config
+// var smtpserver = "" // with port
+// var auth = pochta.LoginAuth("", "")
+// var from = mail.Address{Name: "", Address: ""}
+// var to = mail.Address{Name: "", Address: ""}
+// var subject = ""
 
 var regExpLine = regexp.MustCompile(`\?\{(.*)\?\}(.*)\?\|(\d+)\?\|(.*)$`)
 var logFilePath = "shuher.log"
@@ -417,8 +449,10 @@ func main() {
 	// Create objects.
 	fileWriter := newFileWriter(logFilePath)
 	defer fileWriter.Close()
+	mailWriter := NewMailWriter()
 	logger := newLogger()
 	logger.addLogger(logLevelLeq(Debug), fileWriter)
+	logger.addLogger(logLevelLeq(Notice), mailWriter)
 	logger.addLogger(logLevelLeq(Info), os.Stdout)
 	ftpConn := newFtpConn()
 	ftpConn.SetLogger(logger)
@@ -446,8 +480,9 @@ func main() {
 		ftpConn.quit()
 		// Remove deleted files from the fileList.
 		fileList.clean()
-		// Save new fileList.
+		mailWriter.Send()
 		if ftpConn.GetError() == nil {
+			// Save new fileList.
 			fileList.save(fileListPath)
 			// Wait for sleepTime before checking again.
 			time.Sleep(longSleepTime)
