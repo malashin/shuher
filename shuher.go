@@ -17,7 +17,6 @@ import (
 	"github.com/malashin/pochta"
 )
 
-// Loggerer ...
 type Loggerer struct {
 	logger ILogger
 	err    error
@@ -35,7 +34,6 @@ func (l *Loggerer) Log(loglevel int, text ...interface{}) {
 	}
 }
 
-// Error ...
 func (l *Loggerer) Error(text ...interface{}) {
 	if l.logger != nil {
 		l.logger.Log(Error, "ERROR: "+fmt.Sprint(text...))
@@ -45,12 +43,10 @@ func (l *Loggerer) Error(text ...interface{}) {
 	}
 }
 
-// ResetError ...
 func (l *Loggerer) ResetError() {
 	l.err = nil
 }
 
-// GetError ...
 func (l *Loggerer) GetError() error {
 	return l.err
 }
@@ -317,7 +313,6 @@ func (fl *tFileList) parseLine(line string) (string, fileEntry) {
 	return key, entry
 }
 
-// ILogger ...
 type ILogger interface {
 	Log(loglevel int, text ...interface{})
 }
