@@ -152,14 +152,17 @@ func (f *ftpConn) walk(fl map[string]fileEntry) {
 				key := cwd + "/" + element.Name
 				entry, fileExists := fl[key]
 				if fileExists {
-					// Old file with new date
 					if !entry.Time.Equal(element.Time) {
+						// Old file with new date
 						f.Log(Notice, "~ "+truncPad(key, 40, 'l')+" datetime changed")
 						fl[key] = newFileEntry(element)
+
 					} else if entry.Size != element.Size {
+						// Old file with new size
 						f.Log(Notice, "~ "+truncPad(key, 40, 'l')+" size changed")
 						fl[key] = newFileEntry(element)
 					} else {
+						// Old file
 						entry.Found = true
 						fl[key] = entry
 					}
@@ -226,27 +229,34 @@ func (fe *fileEntry) pack() string {
 
 type tFileList struct {
 	Loggerer
-	file map[string]fileEntry
+	files map[string]fileEntry
 }
 
 func newFileList() *tFileList {
-	return &tFileList{file: map[string]fileEntry{}}
+	return &tFileList{files: map[string]fileEntry{}}
 }
 
 func (fl *tFileList) pack() string {
 	output := []string{}
-	for key, value := range fl.file {
+	for key, value := range fl.files {
 		output = append(output, "?{"+key+"?}"+value.pack()+"\n")
 	}
 	sort.Strings(output)
 	return strings.Join(output, "")
 }
 
+// Mark all files in a filelist to not found
+func (fl *tFileList) unfind() {
+	for _, value := range fl.files {
+		value.Found = false
+	}
+}
+
 func (fl *tFileList) clean() {
-	for key, value := range fl.file {
+	for key, value := range fl.files {
 		if !value.Found {
-			delete(fl.file, key)
-			fl.Log(Notice, "- "+truncPad(key, 40, 'l')+" deleted")
+			delete(fl.files, key)
+			fl.Log(Info, "- "+truncPad(key, 40, 'l')+" deleted")
 		} else {
 			value.Found = false
 		}
@@ -283,7 +293,7 @@ func (fl *tFileList) load(filepath string) {
 	for scanner.Scan() {
 		key, entry := fl.parseLine(scanner.Text())
 		if key != "" {
-			fl.file[key] = entry
+			fl.files[key] = entry
 		}
 	}
 
@@ -468,8 +478,9 @@ func main() {
 		ftpConn.cd(watcherRootPath)
 		// Walk the directory tree.
 		if ftpConn.GetError() == nil {
-			logger.Log(Info, "Looking for new files...")
-			ftpConn.walk(fileList.file)
+			logger.Log(Debug, "Looking for new files...")
+			fileList.unfind()
+			ftpConn.walk(fileList.files)
 			fmt.Print(pad("", len(lastLine)) + "\r")
 		}
 		// Terminate the FTP connection.
