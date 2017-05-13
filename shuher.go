@@ -479,7 +479,6 @@ func main() {
 		// Walk the directory tree.
 		if ftpConn.GetError() == nil {
 			logger.Log(Debug, "Looking for new files...")
-			fileList.unfind()
 			ftpConn.walk(fileList.files)
 			fmt.Print(pad("", len(lastLine)) + "\r")
 		}
@@ -491,6 +490,7 @@ func main() {
 		if err != nil {
 			logger.Log(Error, err)
 		}
+		fileList.unfind()
 		if ftpConn.GetError() == nil {
 			// Save new fileList.
 			fileList.save(fileListPath)
