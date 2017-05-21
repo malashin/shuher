@@ -245,13 +245,6 @@ func (fl *tFileList) pack() string {
 	return strings.Join(output, "")
 }
 
-// Mark all files in a filelist to not found
-func (fl *tFileList) unfind() {
-	for _, value := range fl.files {
-		value.Found = false
-	}
-}
-
 func (fl *tFileList) clean() {
 	for key, value := range fl.files {
 		if !value.Found {
@@ -278,6 +271,7 @@ func (fl *tFileList) save(filepath string) {
 	if err != nil {
 		log.Panicln(err)
 	}
+	fl.Log(Debug, "FileList saved")
 }
 
 func (fl *tFileList) load(filepath string) {
@@ -490,7 +484,6 @@ func main() {
 		if err != nil {
 			logger.Log(Error, err)
 		}
-		fileList.unfind()
 		if ftpConn.GetError() == nil {
 			// Save new fileList.
 			fileList.save(fileListPath)
