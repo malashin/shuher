@@ -70,7 +70,7 @@ func (f *ftpConn) dial(addr string) {
 	}
 	f.conn = conn
 	f.connected = true
-	f.Log(Debug, "Connected to "+addr)
+	f.Log(Debug, "DIAL: Connected to "+addr)
 }
 
 func (f *ftpConn) quit() {
@@ -79,7 +79,7 @@ func (f *ftpConn) quit() {
 	}
 	f.conn.Quit()
 	f.connected = false
-	f.Log(Debug, "Connection closed correctly")
+	f.Log(Debug, "QUIT: Connection closed correctly")
 }
 
 func (f *ftpConn) login(user string, pass string) {
@@ -91,7 +91,7 @@ func (f *ftpConn) login(user string, pass string) {
 		f.Error(err)
 		return
 	}
-	f.Log(Debug, "Logged in as "+user)
+	f.Log(Debug, "LOGIN: Logged in as "+user)
 }
 
 func (f *ftpConn) cwd() string {
@@ -115,6 +115,7 @@ func (f *ftpConn) cd(path string) {
 		f.Error(err)
 		return
 	}
+	f.Log(Debug, "CWD: "+f.cwd())
 }
 
 func (f *ftpConn) cdup() {
@@ -122,6 +123,7 @@ func (f *ftpConn) cdup() {
 		return
 	}
 	f.conn.ChangeDirToParent()
+	f.Log(Debug, "CWD: "+f.cwd())
 }
 
 func (f *ftpConn) ls(path string) (entries []*ftp.Entry) {
@@ -133,6 +135,14 @@ func (f *ftpConn) ls(path string) (entries []*ftp.Entry) {
 		f.Error(err)
 		return
 	}
+	list := []string{}
+	for _, file := range entries {
+		if !(file.Name == "." || file.Name == "..") {
+			list = append(list, file.Name)
+		}
+	}
+	sort.Strings(list)
+	f.Log(Debug, "LIST: ", list)
 	return entries
 }
 
@@ -156,7 +166,6 @@ func (f *ftpConn) walk(fl map[string]fileEntry) {
 						// Old file with new date
 						f.Log(Notice, "~ "+truncPad(key, 40, 'l')+" datetime changed")
 						fl[key] = newFileEntry(element)
-
 					} else if entry.Size != element.Size {
 						// Old file with new size
 						f.Log(Notice, "~ "+truncPad(key, 40, 'l')+" size changed")
@@ -173,9 +182,11 @@ func (f *ftpConn) walk(fl map[string]fileEntry) {
 				}
 			}
 		case ftp.EntryTypeFolder:
-			f.cd(element.Name)
-			f.walk(fl)
-			f.cdup()
+			if !(element.Name == "." || element.Name == "..") {
+				f.cd(element.Name)
+				f.walk(fl)
+				f.cdup()
+			}
 		}
 	}
 }
@@ -252,26 +263,13 @@ func (fl *tFileList) clean() {
 			fl.Log(Info, "- "+truncPad(key, 40, 'l')+" deleted")
 		} else {
 			value.Found = false
+			fl.files[key] = value
 		}
 	}
 }
 
 func (fl tFileList) String() string {
 	return fl.pack()
-}
-
-func (fl *tFileList) save(filepath string) {
-	file, err := os.Create(filepath)
-	if err != nil {
-		log.Panicln(err)
-	}
-	defer file.Close()
-
-	_, err = io.Copy(file, strings.NewReader(fl.pack()))
-	if err != nil {
-		log.Panicln(err)
-	}
-	fl.Log(Debug, "FileList saved")
 }
 
 func (fl *tFileList) load(filepath string) {
@@ -295,6 +293,26 @@ func (fl *tFileList) load(filepath string) {
 	if err != nil {
 		log.Panicln(err)
 	}
+	fl.Log(Debug, "FileList loaded. ", fl.files)
+}
+
+func (fl *tFileList) save(filepath string) {
+	file, err := os.Create(filepath)
+	if err != nil {
+		log.Panicln(err)
+	}
+	defer file.Close()
+
+	_, err = io.Copy(file, strings.NewReader(fl.pack()))
+	if err != nil {
+		log.Panicln(err)
+	}
+	list := []string{}
+	for key := range fl.files {
+		list = append(list, key)
+	}
+	sort.Strings(list)
+	fl.Log(Debug, "FileList saved. ", list)
 }
 
 func (fl *tFileList) parseLine(line string) (string, fileEntry) {
