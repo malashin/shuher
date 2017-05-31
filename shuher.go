@@ -152,6 +152,10 @@ func (f *ftpConn) walk(fl map[string]fileEntry) {
 	}
 	entries := f.ls("")
 	cwd := f.cwd()
+	// Add "/" to cwd path
+	if cwd != "/" {
+		cwd = cwd + "/"
+	}
 	newLine := pad(cwd, len(lastLine))
 	fmt.Print(newLine + "\r")
 	lastLine = cwd
@@ -159,7 +163,7 @@ func (f *ftpConn) walk(fl map[string]fileEntry) {
 		switch element.Type {
 		case ftp.EntryTypeFile:
 			if acceptFileName(element.Name) {
-				key := cwd + "/" + element.Name
+				key := cwd + element.Name
 				entry, fileExists := fl[key]
 				if fileExists {
 					if !entry.Time.Equal(element.Time) {
@@ -182,7 +186,9 @@ func (f *ftpConn) walk(fl map[string]fileEntry) {
 				}
 			}
 		case ftp.EntryTypeFolder:
-			if !(element.Name == "." || element.Name == "..") {
+			if ignoreFoldersMask.MatchString(cwd + element.Name) {
+				f.Log(Debug, "WALK: Ignoring folder \"", cwd+element.Name, "\"")
+			} else if !(element.Name == "." || element.Name == "..") {
 				f.cd(element.Name)
 				f.walk(fl)
 				f.cdup()
@@ -457,7 +463,8 @@ func (m *TMailWriter) Send() error {
 var regExpLine = regexp.MustCompile(`\?\{(.*)\?\}(.*)\?\|(\d+)\?\|(.*)$`)
 var logFilePath = "shuher.log"
 var fileListPath = "shuherFileList.txt"
-var watcherRootPath = "/AMEDIATEKA"
+var watcherRootPath = "/"
+var ignoreFoldersMask = regexp.MustCompile(`^/promo$`)
 var fileMask = regexp.MustCompile(`^.*\.mxf$`)
 var lastLine string
 var longSleepTime = 30 * time.Minute
