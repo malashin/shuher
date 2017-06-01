@@ -502,14 +502,16 @@ func main() {
 			fmt.Print(pad("", len(lastLine)) + "\r")
 			// Terminate the FTP connection.
 			ftpConn.quit()
-			// Remove deleted files from the fileList.
-			fileList.clean()
-			err := mailWriter.Send()
-			if err != nil {
-				logger.Log(Error, err)
+			if ftpConn.GetError() == nil {
+				// Remove deleted files from the fileList.
+				fileList.clean()
+				err := mailWriter.Send()
+				if err != nil {
+					logger.Log(Error, err)
+				}
+				// Save new fileList.
+				fileList.save(fileListPath)
 			}
-			// Save new fileList.
-			fileList.save(fileListPath)
 		}
 		if ftpConn.GetError() == nil {
 			// Wait for sleepTime before checking again.
