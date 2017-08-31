@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -459,20 +460,27 @@ func (m *TMailWriter) Send() error {
 // var from = mail.Address{Name: "", Address: ""}
 // var to = mail.Address{Name: "", Address: ""}
 // var subject = ""
-
 var regExpLine = regexp.MustCompile(`\?\{(.*)\?\}(.*)\?\|(\d+)\?\|(.*)$`)
 var logFilePath = "shuher.log"
 var fileListPath = "shuherFileList.txt"
 var watcherRootPath = "/"
 var ignoreFoldersMask = regexp.MustCompile(`^/promo$`)
-var fileMask = regexp.MustCompile(`^.*\.mxf$`)
+var fileMask = regexp.MustCompile(`(?:\.mxf|\.mp4)$`)
 var lastLine string
 var longSleepTime = 30 * time.Minute
 var shortSleepTime = 1 * time.Minute
 
 func main() {
+
+	// Get filepath to executable.
+	bin, err := os.Executable()
+	if err != nil {
+		panic(err)
+	}
+	binPath := filepath.Dir(bin)
+
 	// Create objects.
-	fileWriter := newFileWriter(logFilePath)
+	fileWriter := newFileWriter(filepath.Join(binPath, logFilePath))
 	defer fileWriter.Close()
 	mailWriter := NewMailWriter()
 	logger := newLogger()
@@ -484,7 +492,7 @@ func main() {
 	fileList := newFileList()
 	fileList.SetLogger(logger)
 	// Load file list.
-	fileList.load(fileListPath)
+	fileList.load(filepath.Join(binPath, fileListPath))
 	// Properly close the connection on exit.
 	defer ftpConn.quit()
 
@@ -510,7 +518,7 @@ func main() {
 					logger.Log(Error, err)
 				}
 				// Save new fileList.
-				fileList.save(fileListPath)
+				fileList.save(filepath.Join(binPath, fileListPath))
 			}
 		}
 		if ftpConn.GetError() == nil {
