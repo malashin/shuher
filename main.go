@@ -72,6 +72,7 @@ func main() {
 			}
 		}
 		if ftpConn.GetError() == nil {
+			fmt.Print("Updated at " + time.Now().Format("2006-01-02 15:04:05") + "\r")
 			// Wait for sleepTime before checking again.
 			time.Sleep(longSleepTime)
 		} else {

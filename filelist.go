@@ -23,8 +23,8 @@ func Pad(s string, n int) string {
 
 func TruncPad(s string, n int, side byte) string {
 	if len(s) > n {
-		if n >= 3 {
-			return "..." + s[len(s)-n+3:len(s)]
+		if n >= 1 {
+			return "…" + s[len(s)-n+1:len(s)]
 		}
 		return s[len(s)-n : len(s)]
 	}
@@ -91,7 +91,7 @@ func (fl *TFileList) Clean() {
 	for key, value := range fl.files {
 		if !value.Found {
 			delete(fl.files, key)
-			fl.Log(Info, "- "+TruncPad(key, 40, 'l')+" deleted")
+			fl.Log(Info, "- "+TruncPad(key, 64, 'l')+" deleted")
 		} else {
 			value.Found = false
 			fl.files[key] = value

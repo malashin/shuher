@@ -111,11 +111,11 @@ func (f *FtpConn) Walk(fl map[string]FileEntry) {
 				if fileExists {
 					if !entry.Time.Equal(element.Time) {
 						// Old file with new date
-						f.Log(Notice, "~ "+TruncPad(key, 40, 'l')+" datetime changed")
+						f.Log(Notice, "~ "+TruncPad(key, 64, 'l')+" datetime changed")
 						fl[key] = NewFileEntry(element)
 					} else if entry.Size != element.Size {
 						// Old file with new size
-						f.Log(Notice, "~ "+TruncPad(key, 40, 'l')+" size changed")
+						f.Log(Notice, "~ "+TruncPad(key, 64, 'l')+" size changed")
 						fl[key] = NewFileEntry(element)
 					} else {
 						// Old file
@@ -124,7 +124,7 @@ func (f *FtpConn) Walk(fl map[string]FileEntry) {
 					}
 				} else {
 					// New file
-					f.Log(Notice, "+ "+TruncPad(key, 40, 'l')+" new file")
+					f.Log(Notice, "+ "+TruncPad(key, 64, 'l')+" new file")
 					fl[key] = NewFileEntry(element)
 				}
 			}
