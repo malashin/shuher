@@ -36,7 +36,7 @@ func main() {
 	defer fileWriter.Close()
 	mailWriter := NewMailWriter()
 	logger := NewLogger()
-	logger.AddLogger(LogLevelLeq(Debug), fileWriter)
+	logger.AddLogger(LogLevelLeq(Info), fileWriter)
 	logger.AddLogger(Notice, mailWriter)
 	logger.AddLogger(LogLevelLeq(Info), os.Stdout)
 	ftpConn := NewFtpConn()
