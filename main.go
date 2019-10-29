@@ -20,7 +20,7 @@ var watcherRootPath = "/"
 var ignoreFoldersMask = regexp.MustCompile(`^/AMEDIATEKA/PROMO$`)
 var fileMask = regexp.MustCompile(`(?:\.mxf|\.mp4)$`)
 var lastLine string
-var longSleepTime = 30 * time.Minute
+var longSleepTime = 15 * time.Minute
 var shortSleepTime = 1 * time.Minute
 
 func main() {
